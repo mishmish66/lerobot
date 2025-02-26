@@ -778,11 +778,10 @@ class LeRobotDataset(torch.utils.data.Dataset):
         else:
             self.image_writer.save_image(image=image, fpath=fpath)
 
-    def add_frame(self, frame: dict) -> None:
+    def _add_frame_to_buffer(self, frame: dict, episode_buffer: dict) -> None:
         """
         This function only adds the frame to the episode_buffer. Apart from images — which are written in a
-        temporary directory — nothing is written to disk. To save those frames, the 'save_episode()' method
-        then needs to be called.
+        temporary directory — nothing is written to disk.
         """
         # Convert torch to numpy if needed
         for name in frame:
@@ -791,20 +790,17 @@ class LeRobotDataset(torch.utils.data.Dataset):
 
         validate_frame(frame, self.features)
 
-        if self.episode_buffer is None:
-            self.episode_buffer = self.create_episode_buffer()
-
         # Automatically add frame_index and timestamp to episode buffer
-        frame_index = self.episode_buffer["size"]
+        frame_index = episode_buffer["size"]
         timestamp = frame.pop("timestamp") if "timestamp" in frame else frame_index / self.fps
-        self.episode_buffer["frame_index"].append(frame_index)
-        self.episode_buffer["timestamp"].append(timestamp)
+        episode_buffer["frame_index"].append(frame_index)
+        episode_buffer["timestamp"].append(timestamp)
 
         # Add frame features to episode_buffer
         for key in frame:
             if key == "task":
                 # Note: we associate the task in natural language to its task index during `save_episode`
-                self.episode_buffer["task"].append(frame["task"])
+                episode_buffer["task"].append(frame["task"])
                 continue
 
             if key not in self.features:
@@ -819,11 +815,29 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 if frame_index == 0:
                     img_path.parent.mkdir(parents=True, exist_ok=True)
                 self._save_image(frame[key], img_path)
-                self.episode_buffer[key].append(str(img_path))
+                episode_buffer[key].append(str(img_path))
             else:
-                self.episode_buffer[key].append(frame[key])
+                episode_buffer[key].append(frame[key])
 
-        self.episode_buffer["size"] += 1
+        episode_buffer["size"] += 1
+
+    def add_frame(self, frame: dict, episode_buffer: dict | None = None) -> None:
+        """
+        This function only adds the frame to the episode_buffer. Apart from images — which are written in a
+        temporary directory — nothing is written to disk. To save those frames, the 'save_episode()' method
+        then needs to be called.
+        """
+        
+        # If no episode buffer is passed, check if there is already one in the class
+        if episode_buffer is None:
+            # If there is no episode buffer in the class, create one
+            if self.episode_buffer is None:
+                self.episode_buffer = self.create_episode_buffer()
+            # Use the episode buffer in the class
+            episode_buffer = self.episode_buffer
+        
+        # Add the frame to the episode buffer
+        self._add_frame_to_buffer(frame, episode_buffer)
 
     def save_episode(self, episode_data: dict | None = None) -> None:
         """
