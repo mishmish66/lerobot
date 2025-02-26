@@ -810,7 +810,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
 
             if self.features[key]["dtype"] in ["image", "video"]:
                 img_path = self._get_image_file_path(
-                    episode_index=self.episode_buffer["episode_index"], image_key=key, frame_index=frame_index
+                    episode_index=episode_buffer["episode_index"], image_key=key, frame_index=frame_index
                 )
                 if frame_index == 0:
                     img_path.parent.mkdir(parents=True, exist_ok=True)
